@@ -1,0 +1,15 @@
+<launch>
+    <!--param name = "/use_sim_time" value = "true" /-->
+
+    <!-- rviz -->
+    <!--node pkg = "rviz" name = "rviz" type = "rviz" required = "true"
+          args = "-d $(find ese_slam)/rviz/IMU_dr.rviz" /-->
+
+    <!-- imu_dr node  -->
+    <node pkg = "ese_slam" name = "imu_dr" type = "imu_dr" output = "screen">
+        <param name = "imu_msg" value = "os1_node/imu" />
+        <param name = "imu_roll" value = "1.4549" />
+        <param name = "imu_pitch" value = "-1.6094" />
+        <param name = "imu_yaw" value = "-3.0197" />
+    </node>
+</launch>
