@@ -30,7 +30,7 @@ class LidarProjection
         LidarProjection():
             nh("~")
             {
-                odomMsgs = nh.subscribe("/odom",10, &LidarProjection::odomMsgsCallBack,this);
+                odomMsgs = nh.subscribe("/odom/inu",10, &LidarProjection::odomMsgsCallBack,this);
                 lidarMsgs = nh.subscribe("/velodyne_points",10, &LidarProjection::lidarMsgsCallBack,this);
 
                 pubMap = nh.advertise<msgs_Point>("projected_cloud",10);

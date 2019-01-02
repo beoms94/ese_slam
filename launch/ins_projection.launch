@@ -1,0 +1,35 @@
+<launch>
+    <!--param name = "/use_sim_time"
+           value = "true"/-->
+
+    <!-- CAN open & parser node -->
+    <!-- IMU node -->
+    <!-- GPS node -->
+
+    <!-- INS Kalman Filtering -->
+    <node pkg = "ese_ins_kf" 
+          name = "ese_ins_node" 
+          type = "ese_ins_node"/>
+
+    <!-- Lidar Projection Node -->
+    <node pkg = "ese_slam" 
+          name = "lidar_projection" 
+          type = "lidar_projection" >
+
+    <node pkg = "ese_slam"
+          name = "map_optimizer"
+          type = "map_optimizer"/>
+
+    <!-- Rviz -->
+    <node pkg = "rviz"
+          name = "rviz"
+          type = "rviz"
+          required = "true"
+          args = " -d $(find ese_slam)/rviz/ins_slam.rviz"/>
+
+    <!-- Rosbag play for simulation -->
+    <node pkg = "rosbag" 
+          name = "rosbag"
+          type = "play"
+          args = "/home/mbek/Desktop/bag_file/velo_0315/first.bag"/>
+</launch>
