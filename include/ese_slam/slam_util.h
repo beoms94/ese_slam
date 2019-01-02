@@ -40,7 +40,7 @@
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 
-#define PI 3.14159265
+#define PI 3.14159265358979323846
 
 typedef pcl::PointXYZI PointI;
 typedef pcl::PointCloud<PointI> Pointcloud;

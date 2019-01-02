@@ -14,7 +14,8 @@
     <!-- Lidar Projection Node -->
     <node pkg = "ese_slam" 
           name = "lidar_projection" 
-          type = "lidar_projection" >
+          type = "lidar_projection"
+          output = "screen"/>
 
     <node pkg = "ese_slam"
           name = "map_optimizer"
@@ -25,7 +26,7 @@
           name = "rviz"
           type = "rviz"
           required = "true"
-          args = " -d $(find ese_slam)/rviz/ins_slam.rviz"/>
+          args = "-d $(find ese_slam)/rviz/ins_slam.rviz"/>
 
     <!-- Rosbag play for simulation -->
     <node pkg = "rosbag" 

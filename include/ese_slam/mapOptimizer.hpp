@@ -17,6 +17,7 @@ using namespace std;
 class MapOptimizer
 {
     private:
+        // ----- GTSAM -----//
         NonlinearFactorGraph gtsamGraph;
         Values initialEstimate;
         Values optimizedEstimate;
@@ -24,6 +25,7 @@ class MapOptimizer
         noiseModel::Diagonal::shared_ptr priorNoise;
         noiseModel::Diagonal::shared_ptr odometryNoise;
 
+        // ----- ROS ----- //
         ros::NodeHandle nh;
 
         ros::Subscriber projectedLidarMsgs;
@@ -43,6 +45,7 @@ class MapOptimizer
         ros::Time last_processing_time;
         double mapping_processing_interval;
 
+        // ----- map optimize ----- //
         PointMap::Ptr temp_cloud;
         PointMap::Ptr GlobalMap;
 
@@ -84,7 +87,8 @@ class MapOptimizer
             nh("~")
             {
                 projectedLidarMsgs = nh.subscribe("/lidar_projection/projected_cloud",10,&MapOptimizer::lidarCallBack,this);
-                projectedLidarOdomMsgs = nh.subscribe("/lidar_projection/projected_cloud_odom",10,&MapOptimizer::odomCallBack,this);
+                projectedLidarOdomMsgs = nh.subscribe("/odom/inu",10,&MapOptimizer::odomCallBack,this);
+                //projectedLidarOdomMsgs = nh.subscribe("/lidar_projection/projected_cloud_odom",10,&MapOptimizer::odomCallBack,this);
 
                 pubGlobalMap = nh.advertise<msgs_Point>("Global_map",10);
                 pubSampleMap = nh.advertise<msgs_Point>("Sample_map",10);
@@ -143,6 +147,7 @@ class MapOptimizer
             double  yaw_;
             yaw_ = atan2(2*((projectedQuaternion(0)*projectedQuaternion(1)) + (projectedQuaternion(2)*projectedQuaternion(3))),
                             1 - 2*((projectedQuaternion(1)*projectedQuaternion(1)) + (projectedQuaternion(2)*projectedQuaternion(2))));
+           yaw_ += PI;
            projectedRPY(2) = yaw_;
 
            current_pose << projectedPose(0), projectedPose(1), yaw_;

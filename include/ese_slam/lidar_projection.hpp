@@ -76,17 +76,28 @@ class LidarProjection
             
             //RPY_ = RPY_ * -1*PI/180;
 
-            std::cout << "radian x :" << RPY_(0) << "\n"
-                      << "radian y :" << RPY_(1) << "\n"
-                      << "radian z :" << RPY_(2) << "\n"
-                      << "degree x :" << RPY_(0)*180/PI << "\n"
-                      << "degree y :" << RPY_(1)*180/PI << "\n"
-                      << "degree z :" << RPY_(2)*180/PI << "\n" << std::endl;
+            RPY_(2) += PI;
 
-            Transform_matrix_ << cos(RPY_(0)), -1*sin(RPY_(0)), 0 , Pose_(0),
-                                 sin(RPY_(0)), cos(RPY_(0))   , 0 , Pose_(1),
-                                 0           , 0              , 1 , Pose_(2),
-                                 0           , 0              , 0 , 0;
+            std::cout << "radian z :" << RPY_(0) << "\n"
+                      << "radian y :" << RPY_(1) << "\n"
+                      << "radian x :" << RPY_(2) << "\n"
+                      << "degree z :" << RPY_(0)*180/PI << "\n"
+                      << "degree y :" << RPY_(1)*180/PI << "\n"
+                      << "degree x :" << RPY_(2)*180/PI << "\n" << std::endl;
+
+            Transform_matrix_ << cos(RPY_(0))*cos(RPY_(1)), 
+                                 (-1*sin(RPY_(0))*cos(RPY_(2)))+(cos(RPY_(0))*sin(RPY_(1))*sin(RPY_(2))), 
+                                 (sin(RPY_(0))*sin(RPY_(2)))+(cos(RPY_(0))*sin(RPY_(1))*cos(RPY_(2))), 
+                                 Pose_(0),
+                                 sin(RPY_(0))*cos(RPY_(1)), 
+                                 (cos(RPY_(0))*cos(RPY_(2)))+(sin(RPY_(0))*sin(RPY_(1))*cos(RPY_(2))), 
+                                 (-1*cos(RPY_(0))*sin(RPY_(2)))+(sin(RPY_(0))*sin(RPY_(1))*cos(RPY_(2))), 
+                                 Pose_(1),
+                                 -1*sin(RPY_(1)),
+                                 cos(RPY_(1))*sin(RPY_(2)), 
+                                 cos(RPY_(1))*cos(RPY_(2)), 
+                                 Pose_(2),
+                                 0, 0, 0, 0;
         }
 
         void publishTransformedCloud()
