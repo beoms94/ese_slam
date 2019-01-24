@@ -27,6 +27,9 @@ class LidarProjection
         Pointcloud::Ptr transformed_Cloud;
 
     public:
+        bool projection_init;
+
+    public:
         LidarProjection():
             nh("~")
             {
@@ -56,6 +59,7 @@ class LidarProjection
             odom_last_time = ros::Time::now();
             cloud_recent_time = ros::Time::now();
             odom_dt = 0;
+            projection_init = 0;
         }
 
         void odomTimeUpdate()
@@ -78,12 +82,12 @@ class LidarProjection
 
             RPY_(2) += PI;
 
-            std::cout << "radian z :" << RPY_(0) << "\n"
+            /*std::cout << "radian z :" << RPY_(0) << "\n"
                       << "radian y :" << RPY_(1) << "\n"
                       << "radian x :" << RPY_(2) << "\n"
                       << "degree z :" << RPY_(0)*180/PI << "\n"
                       << "degree y :" << RPY_(1)*180/PI << "\n"
-                      << "degree x :" << RPY_(2)*180/PI << "\n" << std::endl;
+                      << "degree x :" << RPY_(2)*180/PI << "\n" << std::endl;*/
 
             Transform_matrix_ << cos(RPY_(0))*cos(RPY_(1)), 
                                  (-1*sin(RPY_(0))*cos(RPY_(2)))+(cos(RPY_(0))*sin(RPY_(1))*sin(RPY_(2))), 
@@ -130,35 +134,42 @@ class LidarProjection
 
         void odomMsgsCallBack(const msgs_Odom::ConstPtr& odom_msg)
         {
-            odomTimeUpdate();
+            if(projection_init == 1)
+            {
+                odomTimeUpdate();
 
-            Pose_(0) = odom_msg->pose.pose.position.x;
-            Pose_(1) = odom_msg->pose.pose.position.y;
-            Pose_(2) = odom_msg->pose.pose.position.z;
+                Pose_(0) = odom_msg->pose.pose.position.x;
+                Pose_(1) = odom_msg->pose.pose.position.y;
+                Pose_(2) = odom_msg->pose.pose.position.z;
 
-            Quaternion_(0) = odom_msg->pose.pose.orientation.x;
-            Quaternion_(1) = odom_msg->pose.pose.orientation.y;
-            Quaternion_(2) = odom_msg->pose.pose.orientation.z;
-            Quaternion_(3) = odom_msg->pose.pose.orientation.w;
+                Quaternion_(0) = odom_msg->pose.pose.orientation.x;
+                Quaternion_(1) = odom_msg->pose.pose.orientation.y;
+                Quaternion_(2) = odom_msg->pose.pose.orientation.z;
+                Quaternion_(3) = odom_msg->pose.pose.orientation.w;
 
-            Velocity_(0) = odom_msg->twist.twist.linear.x;
-            Velocity_(1) = odom_msg->twist.twist.linear.y;
-            Velocity_(2) = odom_msg->twist.twist.linear.z;
+                Velocity_(0) = odom_msg->twist.twist.linear.x;
+                Velocity_(1) = odom_msg->twist.twist.linear.y;
+                Velocity_(2) = odom_msg->twist.twist.linear.z;
+            }
 
             return;
         }
 
         void lidarMsgsCallBack(const msgs_Point::ConstPtr& point_msg)
         {
-            pcl::fromROSMsg(*point_msg,*sub_Cloud);
+            if(projection_init == 1)
+            {
+                pcl::fromROSMsg(*point_msg,*sub_Cloud);
 
-            transformed_Cloud->points.resize(sub_Cloud->points.size());
+                transformed_Cloud->points.resize(sub_Cloud->points.size());
 
-            transformMatrixUpdate();
+                transformMatrixUpdate();
 
-            pcl::transformPointCloud(*sub_Cloud, *transformed_Cloud, Transform_matrix_);
+                pcl::transformPointCloud(*sub_Cloud, *transformed_Cloud, Transform_matrix_);
 
-            publishTransformedCloud();
+                publishTransformedCloud();
+            }
+            
             return;
         }
 

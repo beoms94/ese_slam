@@ -7,7 +7,7 @@ int main (int argc, char** argv)
 
     MapOptimizer MO;
 
-    //std::thread publishGlobalMapThread(&MapOptimizer::publishGlobalMapThread, &MO);
+    std::thread publishGlobalMapThread(&MapOptimizer::publishSampleMapThread, &MO);
 
     ros::Rate rate_(1);
     while(ros::ok())

@@ -44,6 +44,7 @@ class MapOptimizer
         ros::Time last_sub_time;
         ros::Time last_processing_time;
         double mapping_processing_interval;
+        double leafSize, mapSize, mapDist;
 
         // ----- map optimize ----- //
         PointMap::Ptr temp_cloud;
@@ -69,9 +70,13 @@ class MapOptimizer
         Vector3f projectedVelocity;
         Vector3f projectedRPY;
         Vector4f projectedQuaternion;
+        Vector3f last_projectedPose;
 
         Vector3f current_pose;
         Vector3f last_pose;
+
+        double current_move_dist;
+        double next_move_dist;
 
         unsigned int current_index;
         unsigned int next_index;
@@ -128,9 +133,13 @@ class MapOptimizer
             projectedVelocity << 0,0,0;
             projectedRPY << 0,0,0;
             projectedQuaternion << 0,0,0,0;
+            last_projectedPose << 0,0,0;
 
             current_pose << 0,0,0;
             last_pose << 0,0,0;
+
+            current_move_dist = 0.0;
+            next_move_dist = 0.0;
 
             current_index = 0;
             next_index = 0;
@@ -139,16 +148,23 @@ class MapOptimizer
 
             loopClosureEnableFlag = false;
 
-            voxel.setLeafSize (0.25,0.25,0.25);
+            nh.param ("leafSize",leafSize, 0.25);
+            nh.param ("mapSize",mapSize, 0.5);
+            nh.param ("mapDist",mapDist, 0.25);
+
+            voxel.setLeafSize (leafSize,leafSize,leafSize);
         }
 
         void getRPYfromQuaternion()
         {
-            double  yaw_;
+            double  roll_, pitch_, yaw_;
             yaw_ = atan2(2*((projectedQuaternion(0)*projectedQuaternion(1)) + (projectedQuaternion(2)*projectedQuaternion(3))),
                             1 - 2*((projectedQuaternion(1)*projectedQuaternion(1)) + (projectedQuaternion(2)*projectedQuaternion(2))));
+            pitch_ = asin(2*((projectedQuaternion(0)*projectedQuaternion(2)) - (projectedQuaternion(3)*projectedQuaternion(1))));
+            roll_ = atan2(2*((projectedQuaternion(0)*projectedQuaternion(3)) + (projectedQuaternion(1)*projectedQuaternion(2))),
+                            1 - 2*((projectedQuaternion(2)*projectedQuaternion(2)) + (projectedQuaternion(3)*projectedQuaternion(3))));
            yaw_ += PI;
-           projectedRPY(2) = yaw_;
+           projectedRPY << roll_, pitch_, yaw_;
 
            current_pose << projectedPose(0), projectedPose(1), yaw_;
 
@@ -171,30 +187,26 @@ class MapOptimizer
                 globalMap[Map_index].points.resize(voxeled_SampleMap->points.size());
                 pcl::copyPointCloud(*voxeled_SampleMap, globalMap[Map_index]);
                 
-                publishSampleMap();
+                //publishSampleMap();
                 //publishGlobalMap();
                 publishTrajectory();
             }
         }
 
         void updateSampleMap()
-        {
-            if(cloudKeyPoses2D->points.empty() && current_index < 10)
+        {            
+            //initial
+            if(cloudKeyPoses2D->points.empty() && current_move_dist < mapDist)
             {
-                if(SampleMap->points.empty())
-                    *SampleMap = *projected_cloud;
-                else
-                    *SampleMap += *projected_cloud;
-                current_index++;
+                *SampleMap += *projected_cloud;
             }
+            //not initial
             else
             {
                 *SampleMap += *projected_cloud;
                 *next_SampleMap += *projected_cloud;
-                current_index++;
-                next_index++;
 
-                if(cloudKeyPoses2D->points.empty() && current_index == 10)
+                if(cloudKeyPoses2D->points.empty() && current_move_dist > mapDist)
                 {
                     cloudKeyPoses2D->points.resize(1);
                     cloudKeyPoses2D->points[0].x = current_pose(0);
@@ -203,7 +215,7 @@ class MapOptimizer
                     cloudKeyPoses2D->points[0].intensity = 0;
                 }
 
-                if(current_index == 20 && next_index == 10)
+                if(current_move_dist > mapSize && next_move_dist > mapDist)
                 {
                     //save sample map
                     Pointcloud::Ptr temp_cloud (new Pointcloud);
@@ -236,12 +248,35 @@ class MapOptimizer
                     *SampleMap = *next_SampleMap;
                     next_SampleMap->clear();
 
-                    current_index = 10;
-                    next_index = 0;
+                    current_move_dist = next_move_dist;
+                    next_move_dist = 0;
 
                     Map_index++;
                 }
             }
+        }
+
+        void calculateDistance()
+        {
+            double ds = sqrt(((projectedPose(0)-last_projectedPose(0))*(projectedPose(0)-last_projectedPose(0)))
+                            +((projectedPose(1)-last_projectedPose(1))*(projectedPose(1)-last_projectedPose(1)))
+                            +((projectedPose(2)-last_projectedPose(2))*(projectedPose(2)-last_projectedPose(2))));
+
+            if(current_move_dist < mapDist) // && next_move_dist < mapDist )
+            {
+                current_move_dist += ds;
+            }
+            else
+            {
+                current_move_dist += ds;
+                next_move_dist += ds;
+
+                //if(current_move_dist < mapSize && current_move > mapDist)
+                //else if(current_move_dist > mapSize)
+            }
+
+            std::cout << current_move_dist << "\n"
+                      << next_move_dist << "\n" << std::endl;
         }
 
         void factorGraphLoop ()
@@ -283,6 +318,7 @@ class MapOptimizer
         void odomCallBack(const msgs_Odom::ConstPtr& odom_msg)
         {
             last_pose = current_pose;
+            last_projectedPose = projectedPose;
 
             projectedPose(0) = odom_msg->pose.pose.position.x;
             projectedPose(1) = odom_msg->pose.pose.position.y;
@@ -294,6 +330,8 @@ class MapOptimizer
             projectedQuaternion(3) = odom_msg->pose.pose.orientation.w;
 
             getRPYfromQuaternion();
+
+            calculateDistance();
 
             return;
         }
@@ -318,6 +356,16 @@ class MapOptimizer
             {
                 rate_globalMap.sleep();
                 publishGlobalMap();
+            }
+        }
+
+        void publishSampleMapThread()
+        {
+            ros::Rate rate_sampleMap(10);
+            while(ros::ok())
+            {
+                rate_sampleMap.sleep();
+                publishSampleMap();
             }
         }
 
