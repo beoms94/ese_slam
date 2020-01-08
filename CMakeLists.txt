@@ -53,22 +53,8 @@ link_directories(
 )
 
 ##-----------------------------------------------------------------
-#add_executable(imu_dr src/mapping/imu_dr.cpp)
-#target_link_libraries(imu_dr ${catkin_LIBRARIES})
-
-##-----------------------------------------------------------------
-#add_executable(lidar_projection src/mapping/lidar_projection.cpp)
-#target_link_libraries(lidar_projection ${catkin_LIBRARIES})
-#add_dependencies(lidar_projection ${catkin_EXPORTED_TARGETS})
-
-##-----------------------------------------------------------------
 add_executable(mapOptimizer src/mapping/mapOptimizer.cpp)
 target_link_libraries(mapOptimizer ${catkin_LIBRARIES} ${PCL_LIBRARIES} gtsam)
 
-add_executable(gtsam_test src/mapping/gtsam_test.cpp)
-target_link_libraries(gtsam_test ${catkin_LIBRARIES} ${PCL_LIBRARIES} gtsam)
-
-##-----------------------------------------------------------------
-#add_executable(LidarProjection src/mapping/LidarProjection.cpp)
-#target_link_libraries(LidarProjection ${catkin_LIBRARIES})
-#add_dependencies(LidarProjection ${catkin_EXPORTED_TARGETS})
+add_executable(ese_localization src/mapping/ese_localization.cpp)
+target_link_libraries(ese_localization ${catkin_LIBRARIES} ${PCL_LIBRARIES} gtsam)

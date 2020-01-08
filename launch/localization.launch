@@ -1,7 +1,7 @@
 <launch>
   <param name ="/use_sim_time" value="true"/>
 
-  <arg name="model" default="/home/mbek/catkin_ws/src/ese_urdf/urdf/esevelo.urdf"/>
+  <arg name="model" default="/home/beoms/catkin_ws/src/ese_urdf/urdf/esevelo.urdf"/>
   <arg name="gui" default="true" />
   <arg name="rvizconfig" default="$(find urdf_tutorial)/rviz/urdf.rviz" />
 
@@ -10,10 +10,9 @@
 
   <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" /> 
   <node name="robot_state_publisher" pkg="robot_state_publisher" type="state_publisher" />
-  <!--node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rvizconfig)" required="true" /-->
 
-  <!-- INS Kalman Filtering -->
-  <!--node pkg = "ese_ins_kf" name = "ese_ins_node" type = "ese_ins_node"/-->
+  <node pkg = "rviz" name = "rviz" type = "rviz"
+          required = "true" args = "-d $(find ese_lidar_projection)/rviz/localization.rviz"/>
 
   <node name="ese_lidar_projection" pkg="ese_lidar_projection" type="ese_lidar_projection" output="screen">
     <param name="ang_threshold" value="2.0"/>
@@ -27,24 +26,16 @@
     <param name="lane_height_threshold" value="3.3"/>
   </node>
 
-  <node pkg="ese_slam" name="mapOptimizer" type="mapOptimizer" output="screen">
+  <node pkg="ese_slam" name="ese_localization" type="ese_localization" output="screen">
     <param name="mapSize" value="15.0"/>
+    <param name="targetMapSize" value="65.0"/>
     <param name="search_size" value="60.0"/>
 
     <param name="objt_leafSize" value="2.0"/>
     <param name="lane_leafSize" value="0.05"/>
-    
-    <param name="threshold_score" value="1.0"/>
-    <param name="Epsilon" value="0.01"/>
-    <param name="stepSize" value="10.5"/>
-    <param name="resolution" value="2.15"/>
-    <param name="iteration" value="200"/>
   </node>
 
   <node pkg = "rosbag" name = "rosbag" type = "play"
-          args = "--clock /home/mbek/Desktop/bag_file/velo_0315/filtered.bag"/> 
+          args = "--clock --pause /home/beoms/Desktop/bag_file/velo_0315/filter.bag"/> 
 
-  <node pkg = "rviz" name = "rviz" type = "rviz"
-          required = "true" args = "-d $(find ese_lidar_projection)/rviz/lidar.rviz"/>
- 
 </launch>

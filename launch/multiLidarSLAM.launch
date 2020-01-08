@@ -1,0 +1,91 @@
+<launch>
+  <param name ="/use_sim_time" value="true"/>
+
+  <arg name="model" default="/home/beoms/catkin_ws/src/ese_urdf/urdf/ese_katri.urdf"/>
+  <arg name="gui" default="true" />
+  <arg name="rvizconfig" default="$(find urdf_tutorial)/rviz/urdf.rviz" />
+
+  <param name="robot_description" textfile="$(arg model)" />
+
+  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" /> 
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="state_publisher" />
+
+  <!-- INS Kalman Filtering -->
+  <node pkg = "ese_ins_kf" name = "ese_ins_node" type = "ese_ins_node" output="screen"/>
+
+  <!-- LiDAR Projection -->
+  <node name="ese_left_projection" pkg="ese_lidar_projection" type="ese_left_projection">
+    <!--param name="l_x" value="0.93" /-->
+    <param name="l_x" value="0.93" />
+    <param name="l_y" value="0.49" />
+    <param name="l_z" value="1.61" />
+    <param name="l_roll" value="0.0" />
+    <param name="l_pitch" value="0.0" />
+    <param name="l_yaw" value="-0.0262" />
+
+    <param name="l_ground_threshold" value="1.0" />
+    <param name="l_objt_threshold" value="0.7" />
+    <param name="l_angthreshold" value="0.0873" />
+
+    <param name="l_dist" value = "20.0" />
+  </node>
+
+  <node name="ese_right_projection" pkg="ese_lidar_projection" type="ese_right_projection">
+    <param name="l_x" value="0.93" />
+    <param name="l_y" value="0.49" />
+    <param name="l_z" value="1.61" />
+    <param name="l_roll" value="0.0" />
+    <param name="l_pitch" value="0.0" />
+    <param name="l_yaw" value="-0.0262" />
+
+    <param name="r_x" value="0.0" />
+    <param name="r_y" value="-1.01463" />
+    <param name="r_z" value="0.0" />
+    <param name="r_roll" value="-0.00345855" />
+    <param name="r_pitch" value="0.00138921" />
+    <param name="r_yaw" value="0.014049" />
+
+    <param name="r_ground_threshold" value="1.0" />
+    <param name="r_objt_threshold" value="0.7" />
+    <param name="r_angthreshold" value="0.0873" />
+
+    <param name="r_dist" value = "20.0" />
+
+    <!--param name="l_x" value="0.0" />
+    <param name="l_y" value="0.49" />
+    <param name="l_z" value="1.61" />
+    <param name="l_roll" value="-0.1745" />
+    <param name="l_pitch" value="0.0" />
+    <param name="l_yaw" value="0.0" />
+
+    <param name="r_x" value="0.0" />
+    <param name="r_y" value="-1.01463" />
+    <param name="r_z" value="0.0" />
+    <param name="r_roll" value="0.3491" />
+    <param name="r_pitch" value="0.00138921" />
+    <param name="r_yaw" value="0.014049" /-->
+  </node>
+
+  <!-- SLAM -->
+  <!--node pkg="ese_slam" name="mapOptimizer" type="mapOptimizer" output="screen">
+    <param      name="mapSize"              value="1.0"/>
+    <param      name="search_size"          value="50.0"/>
+
+    <param      name="right_leafSize"       value="0.2"/>
+    <param      name="left_leafSize"        value="0.2"/>
+    
+    <param      name="threshold_score"      value="10.0"/>
+    <param      name="Epsilon"              value="0.01"/>
+    <param      name="stepSize"             value="1.0"/>
+    <param      name="resolution"           value="1.0"/>
+    <param      name="iteration"            value="500"/>
+  </node-->
+
+  <!-- ETC -->
+  <node pkg = "rosbag" name = "rosbag" type = "play"
+          args = "--clock /home/beoms/Desktop/bag_file/190227_katri/filter03.bag"/> 
+
+  <node pkg = "rviz" name = "rviz" type = "rviz"
+          required = "true" args = "-d $(find ese_slam)/rviz/multiLidarSLAM.rviz"/>
+ 
+</launch>

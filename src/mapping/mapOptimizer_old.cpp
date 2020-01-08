@@ -22,7 +22,7 @@
     |---------------------|---------------------------------------|------------------|--------------------------|
     |      Odometry       |                  odom                 |       odom       |    nav_msgs::Odometry    |
     |---------------------|---------------------------------------|------------------|--------------------------|
-    |                     | ese_lidar_projection/leftMarker_cloud |  lidar_velodyne  | sensor_msgs::PointCloud2 |
+    |                     | ese_lidar_projection/laneMarker_cloud |  lidar_velodyne  | sensor_msgs::PointCloud2 |
     |     Pointcloud      |   ese_lidar_projection/object_cloud   |  lidar_velodyne  | sensor_msgs::PointCloud2 |
     |---------------------|---------------------------------------|------------------|--------------------------|
     |         GPS         |                   fix                 |        gps       |  sensor_msgs::NavSatFix  |
@@ -134,8 +134,8 @@ class MapOptimizer{
            1. mapSize          :  Sample map 생성을 위한 거리 주기 (ex. 5.0 --> 5m 간격으로 sample map 생성)
            2. search_size      :  GTSAM part에서 설명
            3. threshold_score  :  GTSAM part에서 설명
-           4. right_leafSize    :  Sample map 생성 시 Object pointcloud voxel filter 크기
-           5. left_leafSize    :  Sample map 생성 시 left pointcloud voxel filter 크기
+           4. objt_leafSize    :  Sample map 생성 시 Object pointcloud voxel filter 크기
+           5. lane_leafSize    :  Sample map 생성 시 lane pointcloud voxel filter 크기
            6. Epsilon          :  ndt 계산이 멈추기 위한 최저 score 변화량
            7. stepSize         :  초기 ndt 변환시 최대 변화 거리 및 각도(라디안) 
            8. resolution       :  ndt 계산을 위한 Voxel 크기
@@ -170,8 +170,8 @@ class MapOptimizer{
         // ------- ROS basic ------- //
         ros::NodeHandle nh;
 
-        ros::Subscriber sub_left;
-        ros::Subscriber sub_right;
+        ros::Subscriber sub_laneMarker;
+        ros::Subscriber sub_object;
         ros::Subscriber sub_odometry;
         ros::Subscriber sub_fix;
 
@@ -193,15 +193,15 @@ class MapOptimizer{
 
         tf::TransformBroadcaster odom_broadcaster;
 
-        Pointcloud::Ptr input_left_cloud_;
-        Pointcloud::Ptr transformed_left_cloud_;
-        Pointcloud::Ptr input_right_cloud_;
-        Pointcloud::Ptr transformed_right_cloud_;
+        Pointcloud::Ptr input_lane_cloud_;
+        Pointcloud::Ptr transformed_lane_cloud_;
+        Pointcloud::Ptr input_objt_cloud_;
+        Pointcloud::Ptr transformed_objt_cloud_;
 
-        Pointcloud::Ptr last_left_sample_map;
-        Pointcloud::Ptr crnt_left_sample_map;
-        Pointcloud::Ptr last_right_sample_map;
-        Pointcloud::Ptr crnt_right_sample_map;
+        Pointcloud::Ptr last_lane_sample_map;
+        Pointcloud::Ptr crnt_lane_sample_map;
+        Pointcloud::Ptr last_objt_sample_map;
+        Pointcloud::Ptr crnt_objt_sample_map;
 
         Pointcloud::Ptr original_map_position;
         Pointcloud::Ptr original_map_rpy;
@@ -228,14 +228,13 @@ class MapOptimizer{
         Eigen::Affine3f last_tf_affine;
 
         double mapSize;
-        double right_leafSize, left_leafSize;
+        double objt_leafSize, lane_leafSize;
         double Epsilon, stepSize, resolution;
         int iteration;
         bool saveMapFlag;
 
         size_t last_optimized_node_idx;
         size_t last_crnt_idx;
-        size_t loop_input_idx, loop_target_idx;
 
         double f_utm_x, f_utm_y, f_utm_z;
         bool gps_first;
@@ -264,10 +263,10 @@ class MapOptimizer{
             sample_service = nh.advertiseService("save_sample_map",&MapOptimizer::save_sample_service,this);
             global_service = nh.advertiseService("save_global_map",&MapOptimizer::save_global_service,this);
 
-            sub_left = nh.subscribe<msgs_Point>("/ese_left_projection/points",
-                                                      10,&MapOptimizer::leftCallBack,this);
-            sub_right = nh.subscribe<msgs_Point>("/ese_right_projection/points",
-                                                      10,&MapOptimizer::rightCallBack,this);
+            sub_laneMarker = nh.subscribe<msgs_Point>("/ese_lidar_projection/laneMarker_cloud",
+                                                      10,&MapOptimizer::laneCallBack,this);
+            sub_object = nh.subscribe<msgs_Point>("/ese_lidar_projection/object_cloud",
+                                                      10,&MapOptimizer::objtCallBack,this);
             sub_odometry = nh.subscribe<msgs_Odom>("/odom",10,&MapOptimizer::odomCallBack,this);
             sub_fix = nh.subscribe<msgs_Nav>("/fix",10,&MapOptimizer::gpsCallBack,this);
 
@@ -295,22 +294,22 @@ class MapOptimizer{
             nh.param("mapSize",mapSize,5.0);
             nh.param("search_size",search_size,10.0);
             nh.param("threshold_score",threshold_score,1.0);
-            nh.param("right_leafSize",right_leafSize,1.0);
-            nh.param("left_leafSize",left_leafSize,1.0);
+            nh.param("objt_leafSize",objt_leafSize,1.0);
+            nh.param("lane_leafSize",lane_leafSize,0.1);
             nh.param("Epsilon",Epsilon,0.01);
             nh.param("stepSize",stepSize,0.1);
             nh.param("resolution",resolution,1.0);
-            nh.param("iteration",iteration,400);
+            nh.param("iteration",iteration,200);
             
-            input_left_cloud_.reset(new Pointcloud);
-            transformed_left_cloud_.reset(new Pointcloud);
-            input_right_cloud_.reset(new Pointcloud);
-            transformed_right_cloud_.reset(new Pointcloud);
+            input_lane_cloud_.reset(new Pointcloud);
+            transformed_lane_cloud_.reset(new Pointcloud);
+            input_objt_cloud_.reset(new Pointcloud);
+            transformed_objt_cloud_.reset(new Pointcloud);
 
-            last_left_sample_map.reset(new Pointcloud);
-            crnt_left_sample_map.reset(new Pointcloud);
-            last_right_sample_map.reset(new Pointcloud);
-            crnt_right_sample_map.reset(new Pointcloud);
+            last_lane_sample_map.reset(new Pointcloud);
+            crnt_lane_sample_map.reset(new Pointcloud);
+            last_objt_sample_map.reset(new Pointcloud);
+            crnt_objt_sample_map.reset(new Pointcloud);
             global_map.reset(new Pointcloud);
 
             original_map_position.reset(new Pointcloud);
@@ -355,7 +354,7 @@ class MapOptimizer{
 
             // -------   GTSAM   ------- //
             gtsam::Vector Vector6(6);
-            Vector6 << 25*1e-2,25*1e-2,25*1e-5,25*1e-5,25*1e-5,25*1e-3;
+            Vector6 << 25*1e-2,25*1e-2,25*1e-4,25*1e-4,25*1e-4,25*1e-3;
             priorNoise = noiseModel::Diagonal::Sigmas(Vector6);
             odometryNoise = noiseModel::Diagonal::Sigmas(Vector6);
 
@@ -384,7 +383,6 @@ class MapOptimizer{
             last_optimized_node_idx = 0;
             last_crnt_idx = 0;
 
-            ndt_tf_affine = pcl::getTransformation(0.0,0.0,0.0,0.0,0.0,0.0);
             last_tf_affine = pcl::getTransformation(0.0,0.0,0.0,0.0,0.0,0.0);
         }
 
@@ -393,35 +391,35 @@ class MapOptimizer{
 
             PointCloud Data Processing
                    |
-                   |-- leftCallBack()
+                   |-- laneCallBack()
                    |      |
-                   |      |-- copyleftPointCloud()
+                   |      |-- copyLanePointCloud()
                    |      |-- transformMatrixUpdate()
-                   |      |-- lefttransformPointCloud()
-                   |      |-- saveleftPointCloud()
+                   |      |-- LanetransformPointCloud()
+                   |      |-- saveLanePointCloud()
                    |
-                   '-- rightCallBack()
+                   '-- objtCallBack()
                           |
-                          |-- copyrightPointCloud()
+                          |-- copyObjtPointCloud()
                           |-- transformMatrixUpdate()
-                          |-- righttransformPointCloud()
-                          |-- saverightPointCloud()
+                          |-- ObjttransformPointCloud()
+                          |-- saveObjtPointCloud()
         */
-        void copyLeftPointCloud(const msgs_Point::ConstPtr& point_msg)
+        void copyLanePointCloud(const msgs_Point::ConstPtr& point_msg)
         {
-            input_left_cloud_.reset(new Pointcloud);
-            input_left_cloud_->clear();
+            input_lane_cloud_.reset(new Pointcloud);
+            input_lane_cloud_->clear();
 
-            pcl::fromROSMsg(*point_msg, *input_left_cloud_);
+            pcl::fromROSMsg(*point_msg, *input_lane_cloud_);
             return;
         }
 
-        void copyRightPointCloud(const msgs_Point::ConstPtr& point_msg)
+        void copyObjtPointCloud(const msgs_Point::ConstPtr& point_msg)
         {
-            input_right_cloud_.reset(new Pointcloud);
-            input_right_cloud_->clear();
+            input_objt_cloud_.reset(new Pointcloud);
+            input_objt_cloud_->clear();
 
-            pcl::fromROSMsg(*point_msg, *input_right_cloud_);
+            pcl::fromROSMsg(*point_msg, *input_objt_cloud_);
             return;
         }
 
@@ -431,68 +429,58 @@ class MapOptimizer{
                                                         original_rpy_(2),original_rpy_(1),original_rpy_(0));
         }
 
-        void leftTransformPointCloud()
+        void LanetransformPointCloud()
         {
-            Pointcloud::Ptr temp_ (new Pointcloud);
+            transformed_lane_cloud_.reset(new Pointcloud);
+            transformed_lane_cloud_->points.resize(input_lane_cloud_->points.size());
 
-            std::vector<int> indices;
-            pcl::removeNaNFromPointCloud(*input_left_cloud_, *temp_, indices);
-
-            transformed_left_cloud_.reset(new Pointcloud);
-            transformed_left_cloud_->points.resize(input_left_cloud_->points.size());
-
-            pcl::transformPointCloud(*temp_, *transformed_left_cloud_, original_tf_affine);
+            pcl::transformPointCloud(*input_lane_cloud_, *transformed_lane_cloud_, original_tf_affine);
         }
 
-        void rightTransformPointCloud()
+        void ObjttransformPointCloud()
         {
-            Pointcloud::Ptr temp_ (new Pointcloud);
+            transformed_objt_cloud_.reset(new Pointcloud);
+            transformed_objt_cloud_->points.resize(input_objt_cloud_->points.size());
 
-            std::vector<int> indices;
-            pcl::removeNaNFromPointCloud(*input_right_cloud_, *temp_, indices);
-
-            transformed_right_cloud_.reset(new Pointcloud);
-            transformed_right_cloud_->points.resize(input_right_cloud_->points.size());
-
-            pcl::transformPointCloud(*temp_, *transformed_right_cloud_, original_tf_affine);
+            pcl::transformPointCloud(*input_objt_cloud_, *transformed_objt_cloud_, original_tf_affine);
         }
 
-        void saveLeftPointCloud()
+        void saveLanePointCloud()
         {
-            *crnt_left_sample_map += *transformed_left_cloud_;
-            *last_left_sample_map += *transformed_left_cloud_;
+            *crnt_lane_sample_map += *transformed_lane_cloud_;
+            *last_lane_sample_map += *transformed_lane_cloud_;
         }
 
-        void saveRightPointCloud()
+        void saveObjtPointCloud()
         {
-            *crnt_right_sample_map += *transformed_right_cloud_;
-            *last_right_sample_map += *transformed_right_cloud_;
+            *crnt_objt_sample_map += *transformed_objt_cloud_;
+            *last_objt_sample_map += *transformed_objt_cloud_;
         }
 
-        void leftCallBack (const msgs_Point::ConstPtr& point_msg)
+        void laneCallBack (const msgs_Point::ConstPtr& point_msg)
         {
             //1. copy input msgs
             //2. update transformation matrix
             //3. transform input cloud to transformed cloud
             //4. save transformed cloud to sample map 
 
-            copyLeftPointCloud(point_msg);
+            copyLanePointCloud(point_msg);
             transformMatrixUpdate();
-            leftTransformPointCloud();
-            saveLeftPointCloud();
+            LanetransformPointCloud();
+            saveLanePointCloud();
         }
 
-        void rightCallBack (const msgs_Point::ConstPtr& point_msg)
+        void objtCallBack (const msgs_Point::ConstPtr& point_msg)
         {
             //1. copy input msgs
             //2. update transformation matrix
             //3. transform input cloud to transformed cloud
             //4. save transformed cloud to sample map 
 
-            copyRightPointCloud(point_msg);
+            copyObjtPointCloud(point_msg);
             transformMatrixUpdate();
-            rightTransformPointCloud();
-            saveRightPointCloud();
+            ObjttransformPointCloud();
+            saveObjtPointCloud();
         }
 
         void gpsCallBack (const msgs_Nav::ConstPtr& gps_msg)
@@ -500,8 +488,23 @@ class MapOptimizer{
             double utm_x, utm_y, utm_z;
             LatLonToUTMXY(gps_msg->latitude, gps_msg->longitude, 52, utm_y, utm_x);
 
-            //utm_y = -utm_y;
+            utm_y = -utm_y;
             utm_z = gps_msg->altitude; 
+
+            if (!gps_first){
+                if (!isnan(utm_x) && !isnan(utm_y) && !isnan(utm_z)) {
+                    f_utm_x = utm_x;
+                    f_utm_y = utm_y;
+                    f_utm_z = utm_z;
+                    gps_first = true;
+                }
+            }
+            else {
+            //for debugging
+                utm_x -= f_utm_x;
+                utm_y -= f_utm_y;
+                utm_z -= f_utm_z;
+            }
 
             if(sample_map_idx == 0)
             {
@@ -510,17 +513,17 @@ class MapOptimizer{
 
                 Pointcloud::Ptr temp_ (new Pointcloud);
                 temp_->points.resize(1);
-                temp_->points[0].x = utm_y;
-                temp_->points[0].y = utm_x;
-                temp_->points[0].z = 0.0;   //utm_z;
+                temp_->points[0].x = utm_x;
+                temp_->points[0].y = utm_y;
+                temp_->points[0].z = utm_z;
                 temp_->points[0].intensity = sample_map_idx;
 
                 *gps_data += *temp_;
             }
             else
             {
-                gps_(0) = utm_y;
-                gps_(1) = utm_x;
+                gps_(0) = utm_x;
+                gps_(1) = utm_y;
                 gps_(2) = utm_z;
             }
 
@@ -603,34 +606,13 @@ class MapOptimizer{
 
         void tfPositionRpyUpdate()
         {
-            double x_, y_, z_, roll_, pitch_, yaw_;
-            x_ = original_position_(0) - original_map_position->points[last_optimized_node_idx].x;
-            y_ = original_position_(1) - original_map_position->points[last_optimized_node_idx].y;
-            z_ = original_position_(2) - original_map_position->points[last_optimized_node_idx].z;
-            roll_ = original_rpy_(2) - original_map_rpy->points[last_optimized_node_idx].z;
-            pitch_ = original_rpy_(1) - original_map_rpy->points[last_optimized_node_idx].y;
-            yaw_ = original_rpy_(0) - original_map_rpy->points[last_optimized_node_idx].x;
+            position_(0) = tf_map_position->points[last_optimized_node_idx].x + (original_position_(0) - original_map_position->points[last_optimized_node_idx].x);
+            position_(1) = tf_map_position->points[last_optimized_node_idx].y + (original_position_(1) - original_map_position->points[last_optimized_node_idx].y);
+            position_(2) = tf_map_position->points[last_optimized_node_idx].z + (original_position_(2) - original_map_position->points[last_optimized_node_idx].z);
 
-
-            double d_x, d_y, d_z, d_roll, d_pitch, d_yaw;
-            d_x = 0.0; d_y = 0.0; d_z = 0.0;
-            d_roll = tf_map_rpy->points[last_optimized_node_idx].z - original_map_rpy->points[last_optimized_node_idx].z;
-            d_pitch = tf_map_rpy->points[last_optimized_node_idx].y - original_map_rpy->points[last_optimized_node_idx].y;
-            d_yaw = tf_map_rpy->points[last_optimized_node_idx].x - original_map_rpy->points[last_optimized_node_idx].x;
-            
-            Eigen::Affine3f last_;
-            last_ = pcl::getTransformation(d_x,d_y,d_z,d_roll,d_pitch,d_yaw);
-
-            Vector4f c_tf, tf_; 
-            c_tf << x_, y_, z_, 1;
-            tf_ = last_.matrix() * c_tf;            
-
-            position_(0) = tf_map_position->points[last_optimized_node_idx].x + tf_(0);
-            position_(1) = tf_map_position->points[last_optimized_node_idx].y + tf_(1);
-            position_(2) = tf_map_position->points[last_optimized_node_idx].z + tf_(2);
-            rpy_(0) = tf_map_rpy->points[last_optimized_node_idx].x + yaw_;
-            rpy_(1) = tf_map_rpy->points[last_optimized_node_idx].y + pitch_;
-            rpy_(2) = tf_map_rpy->points[last_optimized_node_idx].z + roll_;
+            rpy_(0) = tf_map_rpy->points[last_optimized_node_idx].x + (original_rpy_(0) - original_map_rpy->points[last_optimized_node_idx].x);
+            rpy_(1) = tf_map_rpy->points[last_optimized_node_idx].y + (original_rpy_(1) - original_map_rpy->points[last_optimized_node_idx].y);
+            rpy_(2) = tf_map_rpy->points[last_optimized_node_idx].z + (original_rpy_(2) - original_map_rpy->points[last_optimized_node_idx].z);
 
             publishOdom();
         }
@@ -659,19 +641,19 @@ class MapOptimizer{
             Pointcloud::Ptr temp (new Pointcloud);
 
             pcl::VoxelGrid<PointI> voxel;
-            voxel.setLeafSize (right_leafSize, right_leafSize, right_leafSize);
-            voxel.setInputCloud (last_right_sample_map);
+            voxel.setLeafSize (objt_leafSize, objt_leafSize, objt_leafSize);
+            voxel.setInputCloud (last_objt_sample_map);
             voxel.filter (*temp);
 
-            last_right_sample_map.reset(new Pointcloud);
-            *last_right_sample_map = *temp;
+            last_objt_sample_map.reset(new Pointcloud);
+            *last_objt_sample_map = *temp;
 
-            voxel.setInputCloud (last_left_sample_map);
-            voxel.setLeafSize (left_leafSize, left_leafSize, left_leafSize);
+            voxel.setInputCloud (last_lane_sample_map);
+            voxel.setLeafSize (lane_leafSize, lane_leafSize, lane_leafSize);
             voxel.filter (*temp);
 
-            last_left_sample_map.reset(new Pointcloud);
-            *last_left_sample_map = *temp;
+            last_lane_sample_map.reset(new Pointcloud);
+            *last_lane_sample_map = *temp;
 
         }
 
@@ -729,10 +711,10 @@ class MapOptimizer{
             //based_sample_map update
             Matrix4f mat_to_origin;
             Pointcloud::Ptr temp_to_origin (new Pointcloud);
-            //temp_to_origin->points.resize(last_left_sample_map->points.size() + last_right_sample_map->points.size());
+            //temp_to_origin->points.resize(last_lane_sample_map->points.size() + last_objt_sample_map->points.size());
             temp_to_origin->clear();
-            *temp_to_origin += *last_left_sample_map;
-            *temp_to_origin += *last_right_sample_map;
+            *temp_to_origin += *last_lane_sample_map;
+            *temp_to_origin += *last_objt_sample_map;
 
             double x_, y_, z_;
             x_ = -1*original_map_position->points[sample_map_idx].x;
@@ -748,21 +730,21 @@ class MapOptimizer{
 
             based_sample_map[sample_map_idx].reset(new Pointcloud);
             based_sample_map[sample_map_idx]->clear();
-            based_sample_map[sample_map_idx]->points.resize(last_left_sample_map->points.size() + last_right_sample_map->points.size());
+            based_sample_map[sample_map_idx]->points.resize(last_lane_sample_map->points.size() + last_objt_sample_map->points.size());
             pcl::copyPointCloud(*temp_to_origin,*based_sample_map[sample_map_idx]);
             sample_map_idx++;
 
-            last_left_sample_map.reset(new Pointcloud);
-            last_left_sample_map->clear();
-            *last_left_sample_map = *crnt_left_sample_map;
-            crnt_left_sample_map.reset(new Pointcloud);
-            crnt_left_sample_map->clear();
+            last_lane_sample_map.reset(new Pointcloud);
+            last_lane_sample_map->clear();
+            *last_lane_sample_map = *crnt_lane_sample_map;
+            crnt_lane_sample_map.reset(new Pointcloud);
+            crnt_lane_sample_map->clear();
 
-            last_right_sample_map.reset(new Pointcloud);
-            last_right_sample_map->clear();
-            *last_right_sample_map = *crnt_right_sample_map;
-            crnt_right_sample_map.reset(new Pointcloud);
-            crnt_right_sample_map->clear();
+            last_objt_sample_map.reset(new Pointcloud);
+            last_objt_sample_map->clear();
+            *last_objt_sample_map = *crnt_objt_sample_map;
+            crnt_objt_sample_map.reset(new Pointcloud);
+            crnt_objt_sample_map->clear();
 
             saveMapFlag = false;
 
@@ -817,22 +799,22 @@ class MapOptimizer{
             if(isLoop)
             {
                 Eigen::Affine3f mat_;
-                mat_ = pcl::getTransformation(tf_map_position->points[loop_input_idx].x, tf_map_position->points[loop_input_idx].y, tf_map_position->points[loop_input_idx].z,
-                                              tf_map_rpy->points[loop_input_idx].z, tf_map_rpy->points[loop_input_idx].y, tf_map_rpy->points[loop_input_idx].x);
+                mat_ = pcl::getTransformation(tf_map_position->points[crnt_idx].x, tf_map_position->points[crnt_idx].y, tf_map_position->points[crnt_idx].z,
+                                              tf_map_rpy->points[crnt_idx].z, tf_map_rpy->points[crnt_idx].y, tf_map_rpy->points[crnt_idx].x);
                 Pointcloud::Ptr temp_ (new Pointcloud);
-                temp_->points.resize(based_sample_map[loop_input_idx]->points.size());
+                temp_->points.resize(based_sample_map[crnt_idx]->points.size());
 
-                pcl::transformPointCloud(*based_sample_map[loop_input_idx], *temp_, mat_);
+                pcl::transformPointCloud(*based_sample_map[crnt_idx], *temp_, mat_);
 
                 pcl::toROSMsg(*temp_,temp_cloud);
                 temp_cloud.header.frame_id = "odom";
                 temp_cloud.header.stamp = time_;
                 pub_input_map.publish(temp_cloud);
 
-                mat_ = pcl::getTransformation(tf_map_position->points[loop_target_idx].x, tf_map_position->points[loop_target_idx].y, tf_map_position->points[loop_target_idx].z,
-                                              tf_map_rpy->points[loop_target_idx].z, tf_map_rpy->points[loop_target_idx].y, tf_map_rpy->points[loop_target_idx].x);
-                temp_->points.resize(based_sample_map[loop_target_idx]->points.size());
-                pcl::transformPointCloud(*based_sample_map[loop_target_idx], *temp_, mat_);
+                mat_ = pcl::getTransformation(tf_map_position->points[nearest_node_idx].x, tf_map_position->points[nearest_node_idx].y, tf_map_position->points[nearest_node_idx].z,
+                                              tf_map_rpy->points[nearest_node_idx].z, tf_map_rpy->points[nearest_node_idx].y, tf_map_rpy->points[nearest_node_idx].x);
+                temp_->points.resize(based_sample_map[nearest_node_idx]->points.size());
+                pcl::transformPointCloud(*based_sample_map[nearest_node_idx], *temp_, mat_);
 
                 pcl::toROSMsg(*temp_,temp_cloud);
                 temp_cloud.header.frame_id = "odom";
@@ -912,9 +894,9 @@ class MapOptimizer{
                 diff_x = crnt_gps_x - gps_data->points[node_idx_radius_search[i]].x;
                 diff_y = crnt_gps_y - gps_data->points[node_idx_radius_search[i]].y;
                 diff_z = crnt_gps_z - gps_data->points[node_idx_radius_search[i]].z;
-                dist = sqrt((diff_x*diff_x)+(diff_y*diff_y)); //+(diff_z*diff_z));
+                dist = sqrt((diff_x*diff_x)+(diff_y*diff_y)+(diff_z*diff_z));
 
-                if(gps_last_dist > dist && node_idx_radius_search[i] < crnt_idx-30)
+                if(gps_last_dist > dist && node_idx_radius_search[i] < (crnt_idx-4))
                 {
                     gps_last_dist = dist;
                     nearest_node_idx = node_idx_radius_search[i];
@@ -923,12 +905,13 @@ class MapOptimizer{
             }
             // ------------------------------------ //
 
-            if( gps_last_dist > search_size)
+            if(nearest_node_idx == crnt_idx -1 || nearest_node_idx == crnt_idx -2 || 
+               nearest_node_idx == crnt_idx -3 || nearest_node_idx == crnt_idx -4 ||
+               gps_last_dist > search_size)
                 return false;
             else
             {
-                std::cout << "current_index : " << crnt_idx 
-                          << "\nnearest_node_index : " << nearest_node_idx << std::endl;
+                std::cout << "current_index : " << crnt_idx << "\nnearest_node_index : " << nearest_node_idx << std::endl;
                 return true;
             }
         }
@@ -950,23 +933,14 @@ class MapOptimizer{
 
             pcl::transformPointCloud(*based_sample_map[nearest_node_idx], *target_, target_mat_);
             pcl::transformPointCloud(*based_sample_map[crnt_idx], *input_, input_mat_);
-
-            double d_x,d_y,d_z;
-            d_x = gps_data->points[nearest_node_idx].x - gps_data->points[crnt_idx].x;
-            d_y = gps_data->points[nearest_node_idx].y - gps_data->points[crnt_idx].y;
-            d_z = gps_data->points[nearest_node_idx].z - gps_data->points[crnt_idx].z;
-
-            Eigen::Affine3f mat_;
-            mat_ = pcl::getTransformation(d_x,d_y,d_x,0.0,0.0,0.0);
-            //init_tf_matrix = mat_.matrix();
-
+            
             pcl::NormalDistributionsTransform<PointI, PointI> ndt;
 
             ndt.setTransformationEpsilon(Epsilon);
             ndt.setStepSize (stepSize);
             ndt.setResolution (resolution);
             ndt.setMaximumIterations (iteration);
-
+            
             ndt.setInputSource (input_);
             ndt.setInputTarget (target_);
             ndt.align(*aligned_, init_tf_matrix);
@@ -974,9 +948,10 @@ class MapOptimizer{
             ndt_align_score = ndt.getFitnessScore();
 
             // ------- for test ------- //
-            std::cout << crnt_idx << " " << nearest_node_idx << " "
-                      << ndt_align_score << std::endl;
-            // ------------------------ //
+                std::cout << crnt_idx << " " << nearest_node_idx << " "
+                          << ndt_align_score << std::endl;
+                //std::cout << ndt_tf_matrix << std::endl;
+                // ------------------------ //
             
             if(ndt_align_score < threshold_score)
             {
@@ -1021,7 +996,7 @@ class MapOptimizer{
 
             float ndt_noise  = (float)ndt_align_score;
             gtsam::Vector Vector6(6);
-            Vector6 << ndt_noise*1e-4, ndt_noise*1e-4, ndt_noise*1e-4, ndt_noise*1e-4, ndt_noise*1e-4 , ndt_noise*1e-4; 
+            Vector6 << ndt_noise, ndt_noise, ndt_noise, ndt_noise, ndt_noise, ndt_noise; 
             graph.add(BetweenFactor<Pose3>(crnt_idx,nearest_node_idx,pose_From.between(pose_To),ndtNoise));
 
             LevenbergMarquardtOptimizer optimizer(graph, init_value);
@@ -1052,49 +1027,16 @@ class MapOptimizer{
 
             if(sample_map_idx > last_optimized_node_idx)
             {
-                double d_x, d_y, d_z, d_roll, d_pitch, d_yaw;
-                d_x = 0.0; d_y = 0.0; d_z = 0.0;
-                d_roll = tf_map_rpy->points[last_optimized_node_idx].z - original_map_rpy->points[last_optimized_node_idx].z;
-                d_pitch = tf_map_rpy->points[last_optimized_node_idx].y - original_map_rpy->points[last_optimized_node_idx].y;
-                d_yaw = tf_map_rpy->points[last_optimized_node_idx].x - original_map_rpy->points[last_optimized_node_idx].x;
-                
-                Eigen::Affine3f last_;
-                last_ = pcl::getTransformation(d_x,d_y,d_z,d_roll,d_pitch,d_yaw);
-
                 for(size_t i=last_optimized_node_idx+1;i<sample_map_idx+1;i++)
                 {
-                    /*double x_, y_, z_, roll_, pitch_, yaw_;
-                    x_ = original_map_position->points[i].x - original_map_position->points[last_optimized_node_idx].x;
-                    y_ = original_map_position->points[i].y - original_map_position->points[last_optimized_node_idx].y;
-                    z_ = original_map_position->points[i].z - original_map_position->points[last_optimized_node_idx].z;
-                    roll_ = original_map_rpy->points[i].z - original_map_rpy->points[last_optimized_node_idx].z;
-                    pitch_ = original_map_rpy->points[i].y - original_map_rpy->points[last_optimized_node_idx].y;
-                    yaw_ = original_map_rpy->points[i].x - original_map_rpy->points[last_optimized_node_idx].x;  
-
-                    Vector4f c_tf, tf_; 
-                    c_tf << x_, y_, z_, 1;
-                    tf_ = last_.matrix() * c_tf;            
-
-                    tf_map_position->points[i].x = tf_map_position->points[last_optimized_node_idx].x + tf_(0);
-                    tf_map_position->points[i].y = tf_map_position->points[last_optimized_node_idx].y + tf_(1);
-                    tf_map_position->points[i].z = tf_map_position->points[last_optimized_node_idx].z + tf_(2);
-                    tf_map_rpy->points[i].z = tf_map_rpy->points[last_optimized_node_idx].x + yaw_;
-                    tf_map_rpy->points[i].y = tf_map_rpy->points[last_optimized_node_idx].y + pitch_;
-                    tf_map_rpy->points[i].x = tf_map_rpy->points[last_optimized_node_idx].z + roll_;*/
-
-                    
                     tf_map_position->points[i].x = tf_map_position->points[last_optimized_node_idx].x + (original_map_position->points[i].x - original_map_position->points[last_optimized_node_idx].x);
                     tf_map_position->points[i].y = tf_map_position->points[last_optimized_node_idx].y + (original_map_position->points[i].y - original_map_position->points[last_optimized_node_idx].y);
                     tf_map_position->points[i].z = tf_map_position->points[last_optimized_node_idx].z + (original_map_position->points[i].z - original_map_position->points[last_optimized_node_idx].z);
                     tf_map_rpy->points[i].x = tf_map_rpy->points[last_optimized_node_idx].x + (original_map_rpy->points[i].x - original_map_rpy->points[last_optimized_node_idx].x);
                     tf_map_rpy->points[i].y = tf_map_rpy->points[last_optimized_node_idx].y + (original_map_rpy->points[i].y - original_map_rpy->points[last_optimized_node_idx].y);
                     tf_map_rpy->points[i].z = tf_map_rpy->points[last_optimized_node_idx].z + (original_map_rpy->points[i].z - original_map_rpy->points[last_optimized_node_idx].z);
-                    
                 }
             }
-
-            loop_input_idx = crnt_idx;
-            loop_target_idx = nearest_node_idx;
             isLoop = true;
         }
 

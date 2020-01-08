@@ -91,11 +91,9 @@ struct PointXYZMAP
     PCL_ADD_POINT4D;
     PCL_ADD_INTENSITY;
     uint32_t index_;
-    float position_x;
-    float position_y;
-    float position_z;
-    float latitude;
-    float longitude;
+    float utm_x;
+    float utm_y;
+    float utm_z;
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 }EIGEN_ALIGN16;
 
@@ -105,11 +103,9 @@ POINT_CLOUD_REGISTER_POINT_STRUCT (PointXYZMAP,
                                    (float, z, z)
                                    (float, intensity, intensity)
                                    (uint32_t, index_, index_)
-                                   (float, position_x, position_x)
-                                   (float, position_y, position_y)
-                                   (float, position_z, position_z)
-                                   (float, latitude, latitude)
-                                   (float, longitude, longitude)
+                                   (float, utm_x, utm_x)
+                                   (float, utm_y, utm_y)
+                                   (float, utm_z, utm_z)
                                    )
 PCL_INSTANTIATE_PointCloud(PointXYZMAP);
 
